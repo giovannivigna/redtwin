@@ -1,0 +1,100 @@
+%% RedTwin: AI-Enabled Digital Twins for Continuous Red Teaming of
+%% Open-Source Critical-Infrastructure Stacks
+%% NSF Project Description
+%%
+%% Compile with: pdflatex main.tex (twice to resolve references)
+
+\documentclass[11pt,letterpaper]{article}
+
+%% ---- NSF-style page geometry ----
+%% NSF requires 1-inch margins on all sides and 10-11pt font.
+\usepackage[letterpaper,margin=1in]{geometry}
+
+%% ---- Core packages ----
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{times}                     % Times-like font (NSF-friendly)
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{parskip}
+
+%% ---- Typography / layout ----
+\usepackage{titlesec}
+\usepackage{titletoc}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,backgrounds,calc}
+
+%% ---- Section formatting (NSF-style, compact) ----
+\titleformat{\section}
+  {\normalfont\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\itshape}{\thesubsubsection}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{1.1ex plus 0.3ex minus 0.2ex}{0.6ex plus 0.2ex}
+\titlespacing*{\subsection}{0pt}{0.9ex plus 0.3ex minus 0.2ex}{0.4ex plus 0.2ex}
+\titlespacing*{\subsubsection}{0pt}{0.7ex plus 0.2ex minus 0.2ex}{0.3ex plus 0.2ex}
+
+%% ---- Hyperref settings (subtle) ----
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue!60!black,
+  pdftitle={RedTwin: AI-Enabled Digital Twins for Continuous Red Teaming of Open-Source Critical-Infrastructure Stacks},
+  pdfauthor={Christopher Kruegel and Giovanni Vigna}
+}
+
+%% ---- Convenience macros ----
+%% Note: the macros \cps and \CPSs are retained for internal consistency
+%% with earlier drafts of this proposal, but now expand to terminology
+%% for open-source critical-infrastructure stacks.
+\newcommand{\sysname}{RedTwin\xspace}
+\newcommand{\cps}{open-source stack\xspace}
+\newcommand{\CPSs}{open-source stacks\xspace}
+\newcommand{\CPS}{open-source stack\xspace}
+
+%% ---- Page header (like typical NSF submissions) ----
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}
+
+\begin{document}
+
+%% --- The NSF Project Summary (1 page) is a separate document in the submission package,
+%% --- but is included here for completeness (start on its own page, no page number).
+
+\pagenumbering{gobble}
+\input{sections/00_summary}
+\clearpage
+
+%% --- Project Description: numbered from 1 ---
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\begin{center}
+  {\large\bfseries Project Description}\\[0.3em]
+  {\large\bfseries \sysname: AI-Enabled Digital Twins for Continuous Red Teaming of Open-Source Critical-Infrastructure Stacks}
+\end{center}
+
+\input{sections/01_introduction}
+\input{sections/02_technical_approach}
+\input{sections/03_research_thrusts}
+\input{sections/04_evaluation_plan}
+\input{sections/05_timeline}
+\input{sections/06_broader_impacts}
+\input{sections/07_pi_qualifications}
+\input{sections/08_prior_nsf_support}
+
+\end{document}

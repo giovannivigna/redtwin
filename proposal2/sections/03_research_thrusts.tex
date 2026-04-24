@@ -1,0 +1,491 @@
+\section{Research Thrusts}
+\label{sec:thrusts}
+
+The proposed work is organized into three research thrusts that
+correspond to the major technical challenges underlying \sysname:
+\emph{capturing} an open-source critical-infrastructure stack's
+configuration and behavior
+(Thrust~1, \S\ref{sec:thrust1}), \emph{replicating} it as a
+controlled-fidelity digital twin (Thrust~2, \S\ref{sec:thrust2}), and
+\emph{analyzing} that twin through agentic red teaming
+(Thrust~3, \S\ref{sec:thrust3}). Although the thrusts are presented in
+this order---and the timeline in \S\ref{sec:timeline} phases them
+accordingly---they are deeply coupled: fidelity requirements from
+Thrust~3 drive replication decisions in Thrust~2, which in turn drive
+observation priorities in Thrust~1. Each thrust is accompanied by
+specific research questions, the techniques we propose to investigate,
+and success criteria.
+
+%% =============================================================
+\subsection{Thrust 1: Capturing Open-Source Stack Configurations}
+\label{sec:thrust1}
+
+\subsubsection*{Research questions}
+\textbf{(RQ1.1)} What is the right representation for a living,
+partially-known model of an open-source critical-infrastructure
+deployment, such that AI agents can reason about it, update it
+incrementally, and flag contradictions?
+\textbf{(RQ1.2)} What observation techniques yield the highest
+information per unit of operational risk when applied to a production
+\cps?
+\textbf{(RQ1.3)} How should static documentation and dynamic
+observations be fused when they disagree, and when should the system
+escalate to a human rather than resolving the disagreement itself?
+
+\subsubsection{A Hybrid Knowledge Base}
+
+A recurring observation in our preliminary work is that neither a
+purely-structured representation nor a purely-unstructured one is
+sufficient to capture an \cps.  A graph database cleanly expresses
+``database node A is connected to application server B over subnet
+S via service-mesh proxy X'' but awkwardly expresses ``the upstream
+release notes observe, in the changelog for version 14.2, that
+configurations with \texttt{synchronous\_commit=off} and streaming
+replication may silently lose committed transactions under specific
+failover conditions.''  A vector database cleanly expresses the
+latter but poorly supports topological queries.  We therefore propose
+a \emph{hybrid} knowledge base with two coordinated stores:
+
+\begin{itemize}[leftmargin=1.3em,itemsep=0.1em,topsep=0.2em]
+  \item A property-graph database (prototyped in Neo4j) storing
+  \emph{entities} (hosts, services, devices, users, data stores,
+  network segments, policies), \emph{relationships} (connects-to,
+  depends-on, authenticates-via, trusts, monitors), and
+  \emph{properties} (versions, CPEs, ownership, confidence, provenance).
+  The schema is closed and curated; new node and edge types are
+  introduced through a controlled process rather than by agents on
+  their own authority.
+  \item A vector database (prototyped in Qdrant or Weaviate) storing
+  natural-language content---manual sections, configuration snippets,
+  policy text, log samples, ticket narratives---each with a pointer
+  back to the graph entity or relationship it describes, and a
+  timestamp and source URI for provenance.
+\end{itemize}
+
+The two stores are linked by \emph{anchor edges}: every vector entry
+has one or more anchor edges into the graph, and every graph entity
+can enumerate the vector entries that reference it. Agent queries
+typically traverse both: ``given this database cluster's engine and
+version, what do the upstream release notes and deployment guides say
+about authentication defaults, and does the network topology around
+this cluster contradict those defaults?'' We will investigate whether a
+structured prompting convention---retrieval over the vector store
+constrained by a graph-traversal filter---yields better agent reasoning
+than either store alone.
+
+\paragraph{Research sub-problem: confidence and contradiction.}
+Unlike a configuration-management database, which assumes its contents
+are true, the \sysname KB must represent uncertainty and disagreement.
+We propose to extend each fact with a \emph{confidence score}
+(initially derived from source type: written documentation and project
+READMEs are trusted less than observed network behavior, which is
+trusted less than cryptographic attestation of running binaries), an
+\emph{agreement set} (the observations that support the fact), and a
+\emph{disagreement set} (the observations that contradict it). An open
+research question is how to calibrate these scores in a way that
+downstream agents---particularly Red Team Agents, whose attack plans
+may hinge on a single load-bearing fact---can use.
+
+\subsubsection{Observation Techniques}
+
+Observer Agents gather information about the running \cps through
+\emph{strictly passive} means. We propose to investigate five
+complementary techniques, each with distinct coverage, cost, and
+deployability profiles.
+
+\paragraph{Passive network analysis.}
+Observer Agents consume packet captures from network taps or SPAN
+ports, using protocol dissectors to reconstruct flows and sessions.
+For the application-layer protocols characteristic of open-source
+stacks---database wire protocols (PostgreSQL, MySQL, MongoDB), message
+broker protocols (Kafka, AMQP, NATS), RPC frameworks (gRPC,
+Thrift), coordination protocols (etcd's Raft-over-gRPC,
+ZooKeeper's ZAB), and cluster-internal HTTP---we will extend
+existing open-source dissectors where available and build LLM-assisted
+dissectors for custom or less-standardized variants, using the project
+documentation stored in the KB as few-shot context. A key research
+question is \emph{flow attribution}: given a flow between two hosts,
+can the Observer infer the application-layer purpose (e.g.,
+``application tier polling the authorization service once per request,
+cache miss rate rising'') rather than just the protocol?
+
+\paragraph{Log monitoring.}
+Open-source infrastructure stacks produce logs in radically
+inconsistent formats: structured JSON from modern services, line-oriented
+syslog-like records from legacy Unix daemons, the idiosyncratic
+text formats of widely-used servers (nginx access logs, PostgreSQL
+logs, Kafka broker logs), and free-form application output. We
+propose an LLM-based log normalization pipeline that
+maps arbitrary log records into a shared ontology (event type,
+source, target, outcome, attributes) rooted in the KB's graph schema.
+The research contribution here is not the use of LLMs for
+log parsing---that is now standard---but the closed-loop use of the KB
+as grounding: because the agent knows what hosts and services exist,
+it can validate parses against plausible entities and flag spurious
+matches.
+
+\paragraph{API monitoring.}
+Modern \cps deployments increasingly use microservice-style
+architectures throughout the stack. Where this is the case, we
+will use service-mesh facilities (e.g., Istio with Envoy or Linkerd)
+or eBPF-based probes to capture inter-service API calls without
+touching application code. This gives the Observer access to
+semantics---which service called which API on which resource---that
+network-layer observation cannot.
+
+\paragraph{Configuration monitoring.}
+Open-source critical-infrastructure stacks are typically managed
+through configuration managers such as Ansible, Puppet, Chef, or
+SaltStack, through infrastructure-as-code systems such as Terraform
+and Helm, and through GitOps workflows (e.g., ArgoCD, Flux) that
+continuously reconcile Kubernetes clusters with versioned manifests.
+Where such a system is present, an Observer Agent with read-only
+access to its inventory, manifests, and playbooks can extract a large
+fraction of the system's intended configuration directly, without ever
+touching a production host. We will build adapters for the major
+open-source configuration and GitOps systems and, where third-party
+vendors provide proprietary management APIs, evaluate the cost of
+extending the approach.
+
+\paragraph{Security-tool integration.}
+Finally, Observer Agents will integrate with existing security tooling
+when it is present: endpoint detection and response (EDR) agents,
+cloud-native runtime security products (e.g., those in the
+Falco/Wiz/Sysdig category), container-image scanners, and security
+information and event management (SIEM) systems. The value here is
+not to replace these tools but to treat their alerts as
+observations---signals that the KB should record and that Red Team
+Agents should consider when modeling what an attacker would see.
+
+\paragraph{Research sub-problem: observation planning as an optimization
+problem.}
+Observer Agents do not enjoy unlimited visibility. SPAN ports are
+scarce; storage and bandwidth are finite; some network segments can
+only be observed through a single, contended vantage point. We propose
+to formulate observation planning as a constrained optimization: given
+a set of KB entities of interest, a set of possible vantage points,
+and a budget, maximize the expected information gain about the
+uncertain parts of the KB. We will investigate whether this problem
+admits a tractable approximation and whether solutions computed by a
+classical optimizer can be improved by LLM-guided reasoning about
+which facts are security-relevant.
+
+\subsubsection{Expected Outcomes of Thrust~1}
+\begin{itemize}[leftmargin=1.3em,itemsep=0.1em,topsep=0.2em]
+  \item A schema and open-source implementation of a hybrid,
+  uncertainty-aware knowledge base for open-source
+  critical-infrastructure stacks.
+  \item An extensible library of passive observation modules, including
+  adapters for common open-source application-layer protocols, log
+  normalizers, service-mesh probes, configuration-manager and GitOps
+  readers, and SIEM connectors.
+  \item An evaluation, on reference \CPSs (see
+  \S\ref{sec:evaluation}), of the coverage, latency, and
+  operational-risk profile of the above techniques.
+\end{itemize}
+
+%% =============================================================
+\subsection{Thrust 2: Replicating Deployments}
+\label{sec:thrust2}
+
+\subsubsection*{Research questions}
+\textbf{(RQ2.1)} What does it mean for a digital twin to be
+``sufficiently faithful'' for security analysis, and how can that
+property be measured?
+\textbf{(RQ2.2)} Given that a perfectly faithful twin of a large \cps
+is infeasible, how should a replication algorithm trade fidelity
+against cost, and what parameters should the operator be able to
+control?
+\textbf{(RQ2.3)} For components that cannot be reproduced directly
+in the twin, how can an observed behavior be turned into a mock that
+is sound for security analysis?
+
+\subsubsection{Controlled-Fidelity Replication}
+
+The naive approach to digital twin construction---replicate every
+component---fails for three reasons: large \CPSs contain dozens or
+hundreds of service instances, many of which are replicas of the
+same underlying binary with only small configuration differences;
+some components in the stack are closed-source or depend on
+third-party services that cannot be copied wholesale into the twin;
+and the operational cost of running a full-scale replica (especially
+of data tiers whose state is measured in terabytes) often exceeds the
+cost of the original. \sysname's replication approach is therefore
+explicitly \emph{representational} rather than \emph{exhaustive}: the
+twin preserves the features that matter for security analysis and
+deliberately abstracts away features that do not.
+
+We formalize this as a \emph{controlled-fidelity replication problem}.
+Given the KB's inventory of components, the twin is characterized by
+three parameters:
+
+\begin{description}[leftmargin=1.6em,style=nextline,itemsep=0.15em,topsep=0.3em]
+  \item[Diversity ($D$).] Every equivalence class of components in
+  the original system (defined by project, version, configuration
+  profile, and role---e.g., ``PostgreSQL 14.8 primary with
+  streaming replication enabled and \texttt{pg\_hba} configured for
+  LDAP auth'') must be represented by at least one instance in the
+  twin. This is the minimum condition for the Red Team to encounter
+  every version- and configuration-specific bug class present in the
+  real system.
+  \item[Topology representation ($T$).] Many vulnerabilities depend
+  on \emph{patterns} of connectivity rather than individual links
+  (e.g., ``application tier and database tier share a flat network
+  segment with no egress filtering'', ``the secrets manager is
+  reachable from the build cluster via a single overly-permissive
+  IAM policy''). Our algorithm enumerates recurring
+  topological patterns in the original system and guarantees that
+  each pattern appears at least once in the twin.
+  \item[Data representation ($R$).] Some attacks depend on the data
+  being processed (e.g., SQL injection attacks that depend on
+  particular column types and constraints; deserialization attacks
+  that depend on specific class paths being available; business-logic
+  attacks that depend on realistic account, role, or tenant
+  distributions). The twin is populated with synthetic
+  data whose statistical and schema-level properties match the
+  original, under a privacy constraint that excludes
+  personally-identifiable and safety-sensitive records.
+\end{description}
+
+Given $(D, T, R)$, the replication algorithm solves a set-cover-like
+problem: select a minimum-size set of component instances that
+covers all equivalence classes, all required topological patterns,
+and all required data-distribution targets. We will investigate
+approximation algorithms for this problem and develop an
+operator-facing interface that exposes $(D, T, R)$ as tunable knobs,
+with default settings derived from the KB's risk model.
+
+\paragraph{Research sub-problem: quantifying fidelity.}
+A central open question is how to measure whether a twin is
+``faithful enough.'' We propose two complementary metrics. The first
+is \emph{attack reproducibility}: for a seeded set of known-real
+vulnerabilities (injected deliberately into the real system and
+documented in the KB, or drawn from historical CVE reports on identical
+component versions), what fraction can the Red Team reproduce against
+the twin? The second is \emph{behavioral divergence}: for a stream of
+observations on the real system, how often does the twin produce a
+statistically distinguishable response to the same stimulus? We will
+investigate both metrics empirically on reference testbeds.
+
+\subsubsection{Replicating Opaque and Hard-to-Virtualize Components}
+
+A substantial fraction of the components in a typical
+critical-infrastructure deployment cannot be reproduced by simply
+spinning up another container from an upstream image. These include
+closed-source third-party services that the open-source stack depends
+on (identity providers, payment gateways, vendor-supplied connectors),
+services whose state is too large or too sensitive to copy into the
+twin (production databases, object stores), and custom components
+whose source is not available to the assessment team. Our group has
+spent the last decade developing techniques to model exactly these
+kinds of opaque systems---techniques that transfer naturally to
+software-component replication, as described below. \sysname builds
+directly on that foundation.
+
+\paragraph{Direct replication from upstream artifacts.}
+For the great majority of components in an open-source stack, the
+Replication Agent constructs a twin instance by pulling the same
+upstream artifact (container image, binary package, or source build)
+that production uses, pinned to the same version, and applying the
+configuration recovered from the KB. This is the common case for
+open-source software and is what makes \sysname's approach tractable
+in ways that would be impossible for proprietary stacks.
+
+\paragraph{Configuration and state sanitization.}
+For stateful components---databases, object stores, message brokers
+with durable queues---the twin is built from the same binary as
+production but populated with a sanitized replica of state: schemas
+and indexes are preserved, row counts are preserved by percentile, but
+personally-identifiable and safety-sensitive records are replaced with
+synthetic equivalents that match the distribution of the originals.
+Our prior work on HALucinator [Clements et al., USENIX Security 2020],
+which automatically substitutes high-level implementations for
+low-level components whose faithful reproduction is infeasible, provides
+a methodological template: rather than replacing hardware-abstraction-layer
+calls, the Replication Agent here replaces specific rows, files, or
+message payloads with synthetic analogues while preserving the
+surrounding structure.
+
+\paragraph{Behavioral mock synthesis.}
+For components where direct replication is infeasible---closed-source
+third-party services, external APIs, or components whose dependencies
+cannot be satisfied in the twin---we will apply ideas from our
+Conware [Spensky et al., AsiaCCS 2021] work, which automatically models
+opaque systems from recorded interactions. A Replication Agent will
+construct a finite-state model of the component's externally visible
+behavior from Observer traces, and instantiate that model as a mock
+service that responds to queries as the real component would. Mocks
+are not a substitute for real execution, and we are careful to label
+findings produced against them as such; but they allow the surrounding
+system to be reasoned about without the mocked component becoming a
+hole that disables all analysis.
+
+\paragraph{Human escalation for irreducible gaps.}
+Some components will resist all of the above approaches: the real
+component depends on credentials or data that the assessment team is
+not authorized to replicate; the service is itself an operator
+(e.g., a human approval step in a workflow); or the component
+performs an external side-effect (sending email, billing a customer)
+whose simulation raises its own concerns. In these cases, the
+Replication Agent surfaces a structured request to the human operator,
+who may provide additional information, authorize an offline
+reconstruction, or declare the component out of scope for the current
+twin.
+
+\subsubsection{Expected Outcomes of Thrust~2}
+\begin{itemize}[leftmargin=1.3em,itemsep=0.1em,topsep=0.2em]
+  \item A formalization of the controlled-fidelity replication problem
+  and one or more approximation algorithms.
+  \item Metrics for quantifying twin fidelity, together with an
+  empirical evaluation on reference \CPSs.
+  \item Open-source tooling that drives agent-directed twin
+  construction from upstream artifacts, applying ideas adapted from
+  HALucinator and Conware to the replacement and behavioral modeling
+  of opaque software components.
+\end{itemize}
+
+%% =============================================================
+\subsection{Thrust 3: Analyzing Deployments}
+\label{sec:thrust3}
+
+\subsubsection*{Research questions}
+\textbf{(RQ3.1)} How should component-level vulnerability analyses
+(fuzzing, static analysis, symbolic execution) be scheduled and
+composed against a digital twin of non-trivial size?
+\textbf{(RQ3.2)} Can multi-step attack plans generated by AI-planning
+techniques and refined by LLM-based reasoning discover vulnerabilities
+that component-level analyses miss?
+\textbf{(RQ3.3)} How should an agentic red team triage its own
+findings before escalating to a human, so that the human's time is
+spent on attacks that are both likely real and likely
+high-consequence?
+
+\subsubsection{Component-Level Analyses}
+
+The twin is, by design, a controllable and repeatable target. This
+allows a wide range of analyses that would be unsafe against the real
+system:
+
+\begin{itemize}[leftmargin=1.3em,itemsep=0.1em,topsep=0.2em]
+  \item \emph{Coverage-guided fuzzing} of services, using tools such
+  as AFL++\ and LibAFL against network-accessible components, including
+  application-protocol fuzzers seeded with corpora drawn from Observer
+  traffic captures.
+  \item \emph{Static analysis} of service binaries and, where source
+  is available, source code, using the \texttt{angr} binary-analysis
+  framework (co-developed by the PIs) and LLM-assisted bug-pattern
+  detectors that specialize in authentication handlers, deserializers,
+  and request-routing logic.
+  \item \emph{Symbolic execution} for authentication and authorization
+  logic, where the state space is small enough to explore exhaustively.
+  \item \emph{Configuration analysis} that evaluates the twin's
+  configuration against a library of known misconfiguration patterns
+  (default credentials, permissive network policies, insecure
+  cryptographic settings, and deployment-specific patterns such as
+  ``build-system service account with cluster-admin on the production
+  namespace'' or ``secrets manager reachable from a publicly-exposed
+  ingress controller'').
+\end{itemize}
+
+Each component-level analysis produces \emph{atomic findings}: concrete
+weaknesses characterized by a precondition (what an attacker must
+already have in order to exploit the weakness) and a postcondition
+(what the attacker gains). Atomic findings are pushed into the KB,
+where they become available to the system-level planner.
+
+\subsubsection{System-Level Multi-Step Attack Planning}
+
+The central intellectual claim of Thrust~3 is that individual atomic
+findings, while useful, are not where the most severe \cps
+vulnerabilities live. Real incidents---the SolarWinds supply-chain
+compromise, the Log4Shell exploitation wave, the MOVEit data-theft
+campaign, the Colonial Pipeline ransomware event---invariably involve
+\emph{chains}: initial access through one weakness, lateral movement
+through another, privilege escalation through a third, and
+consequential action through a fourth. Any automated red team that
+stops at atomic findings will systematically miss the class of attacks
+operators most need to know about.
+
+Our ChainReactor work [Pasquale et al., USENIX Security 2024] demonstrated that AI
+planning---specifically, PDDL-based planning over atomic attacks
+characterized by preconditions and postconditions---can discover
+privilege-escalation chains in Unix environments that even expert
+red-teamers missed. \sysname extends this approach in three directions.
+
+\paragraph{Domain expansion.}
+Where ChainReactor operated on a single host, \sysname operates on a
+multi-host, multi-service, deployment-wide domain. We will extend the
+PDDL formulation to model network segments, service-to-service trust
+relationships, identity- and token-scoped attacker capabilities, and
+data-tier effects (e.g., ``attacker can read rows from table $T$'',
+``attacker can write to topic $K$'', ``attacker holds a valid token
+for service $S$''). The state-space explosion that results will be
+managed by a combination of hierarchical planning (plan at the
+segment or namespace level, then refine within) and LLM-guided
+heuristic search, in which a language model proposes candidate next
+steps that a classical planner then validates.
+
+\paragraph{Grounded plan synthesis with LLMs.}
+Recent evaluations show that AI agents are making measurable progress
+on multi-step attack scenarios, and that even relatively small models
+can propose plausible attack steps when given appropriate context.
+However, LLMs are also known to hallucinate preconditions and
+postconditions, which is unacceptable for an automated red team. We
+will investigate a hybrid approach in which LLMs propose candidate
+attack plans in natural language, a grounding module converts each
+step into PDDL actions (refusing steps that do not correspond to
+atomic findings in the KB), and a classical planner validates the
+result. Our recent experience with the Artiphishell system in the
+DARPA AIxCC competition provides a working foundation for this style
+of LLM/classical-planner hybrid.
+
+\paragraph{Attack execution and confirmation.}
+A plan that is valid on paper is not yet evidence of a vulnerability.
+\sysname instantiates the twin, executes the plan against it using a
+library of attack primitives implemented as Python agents, and checks
+whether the nominated flag is reached. Successful plans are replayed
+on a clean twin snapshot to eliminate side-effects introduced by
+earlier attempts. Failed plans are examined for their failure reasons,
+which are written back into the KB and used to refine future planning.
+
+\subsubsection{Findings Triage and Human Escalation}
+
+An unfiltered agentic red team will generate more findings than a
+human team can validate. \sysname therefore includes a triage stage
+that ranks findings before presenting them. The ranking draws on four
+signals: the \emph{confidence} with which the KB entities supporting
+the finding are grounded in observations (as opposed to documentation
+alone); the \emph{consequence class} of the compromised flag (as
+defined in the operator's security policy); the \emph{path length} of
+the attack (shorter chains are more likely to be realistic); and the
+\emph{novelty} of the finding relative to previously-reported ones.
+Triage is itself an agentic process, and its outputs are auditable:
+the analyst receives a ranked list with a short natural-language
+justification for each item, and can drill into the provenance trace
+that supports it.
+
+\subsubsection{False Positives and the Fidelity Feedback Loop}
+
+When a finding is labeled as a false positive by the human analyst,
+the cause is almost always one of two things: a divergence between
+the twin and the real system (``that port isn't actually open in
+production''), or a policy misalignment (``that user does have
+legitimate access to that resource''). Both cases produce structured
+feedback into the KB. Divergences trigger the Observer Agents to
+re-investigate the relevant corner of the system; policy
+misalignments trigger a KB update that Red Team Agents will consider
+in future planning. This closed loop is what distinguishes \sysname
+from a one-shot penetration test: over time, both the twin's fidelity
+and the red team's precision should improve.
+
+\subsubsection{Expected Outcomes of Thrust~3}
+\begin{itemize}[leftmargin=1.3em,itemsep=0.1em,topsep=0.2em]
+  \item A PDDL-based attack-planning domain for multi-host, multi-service
+  open-source deployments, together with a hybrid LLM/classical planner.
+  \item An open-source agentic red-team framework that composes
+  component-level analyses into end-to-end attack plans, executable
+  against \sysname digital twins.
+  \item An empirical study on reference \CPSs of the precision, recall,
+  and path-length distribution of discovered attacks, with comparison
+  to human-red-team baselines where available.
+\end{itemize}
