@@ -1,0 +1,60 @@
+\section{Evaluation Plan}
+\label{sec:evaluation}
+
+The three thrusts will be evaluated through a combination of
+controlled testbed experiments, collaborations with industry and
+critical-infrastructure partners, and end-to-end case studies.
+
+\paragraph{Reference testbeds.}
+We will build a small number of reference \cps testbeds in our lab,
+spanning sectors with distinct threat models: a water-treatment
+mini-plant (SCADA + PLCs + HMI), a building-automation deployment
+(BACnet + IP-connected controllers), and a medical-device bench
+(networked infusion pump and monitoring stack, analyzed in cooperation
+with our institutional medical-device program). These testbeds are
+small enough to allow ground truth about their configuration and
+vulnerabilities to be established by hand, but representative enough
+that findings generalize. For each testbed we will maintain a
+versioned KB and a seeded set of known vulnerabilities (drawn from
+historical CVEs applicable to the specific devices and firmware
+versions) against which \sysname's precision and recall can be
+measured.
+
+\paragraph{Partner environments.}
+We will work with industry partners and critical-infrastructure
+organizations to evaluate \sysname against real operational environments.
+The evaluation will focus on the KB and Observer Agents (which are
+the components deployable against production systems) and on the
+ability of our framework to replicate partner environments from the
+evidence partners already have. We expect partners to provide
+documentation and logs, and---under appropriate safeguards---read-only
+observation opportunities. The Red Team Agents will be run only
+against the resulting twin.
+
+\paragraph{UCSB campus as a secondary target.}
+As an intermediate-scale non-\cps environment, we will also develop
+Observer Agents for UCSB internal networks. This gives us a large,
+heterogeneous, cooperative target on which we can refine observation
+techniques before applying them to more sensitive environments.
+
+\paragraph{Metrics.}
+We will report the following metrics across thrusts:
+\emph{KB coverage and freshness} (fraction of ground-truth entities
+represented, median staleness of their properties);
+\emph{observation risk} (measured operational impact on targets, with
+zero incidents as a hard requirement);
+\emph{twin fidelity} (attack reproducibility and behavioral divergence,
+as defined in \S\ref{sec:thrust2});
+\emph{analysis yield} (number of confirmed vulnerabilities per
+twin-hour of analysis); and
+\emph{human efficiency} (findings validated per analyst-hour, and
+true-positive rate of escalated findings).
+
+\paragraph{Baselines and comparisons.}
+Where possible, we will compare \sysname's findings against the
+results of traditional manual penetration tests performed on the same
+testbeds. We will also compare against purely component-level
+analyses (fuzzing alone, static analysis alone), to measure the
+marginal contribution of multi-step planning. Finally, we will
+conduct ablation studies to quantify the contribution of each agent
+role and of the LLM/classical-planner hybrid.

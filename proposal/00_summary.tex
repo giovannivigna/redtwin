@@ -1,0 +1,82 @@
+%% --- Project Summary (1 page) ---
+%% NSF requires three labeled subsections: Overview, Intellectual Merit, Broader Impacts.
+
+\begin{center}
+  {\large\bfseries Project Summary}\\[0.3em]
+  {\large\bfseries \sysname: AI-Enabled Digital Twins for Continuous Red Teaming of Cyberphysical Systems}
+\end{center}
+
+\noindent\textbf{Overview.}
+Cyberphysical systems (\CPSs) underpin the Nation's critical
+infrastructure---power grids, water plants, hospitals, manufacturing.
+Yet assessing their security posture remains a largely manual, ad hoc,
+and infrequent activity.
+\CPSs are inherently difficult to analyze: they are heterogeneous
+mixtures of commodity computing, specialized controllers, and legacy
+hardware; they are dynamic in both infrastructure and usage; and they
+execute processes that must not be disrupted. A network scan that is
+routine in an enterprise environment can, in a chemical plant, trigger a
+safety-critical shutdown; a fuzzing campaign against a medical device
+can injure a patient. As a result, security assessments are scheduled
+rarely and performed by scarce human experts, while adversaries---now
+increasingly augmented with AI---operate continuously.
+
+This project proposes \sysname, an agentic framework that enables the
+\emph{continuous, in-depth, and non-disruptive} security assessment of
+cyberphysical systems. \sysname uses cooperating teams of AI agents to
+(i)~ingest documentation, configuration, and runtime signals from a
+target \cps into a structured and vectorized knowledge base;
+(ii)~passively observe the system to build an evolving model of its
+components, software, and flows; (iii)~synthesize a \emph{digital twin}
+that is a minimally representative yet faithful replica of the original;
+(iv)~continuously red-team the twin using component-level analyses
+(fuzzing, static analysis, symbolic execution) composed into multi-step
+attack plans; and (v)~surface prioritized findings to human analysts,
+who validate them on the original system and whose feedback refines
+the twin. Four agent roles---Knowledge Base, Observer, Replication,
+and Red Team---operate as a feedback loop rather than a linear
+pipeline, so that twin and analysis co-evolve with the real system.
+
+\smallskip
+\noindent\textbf{Intellectual Merit.}
+\sysname advances the state of the art in three ways. First, the project
+develops new techniques for automatically constructing a living model of
+a \cps from heterogeneous, partial, and sometimes inconsistent evidence,
+combining graph-structured knowledge with natural-language
+representations to support agent reasoning. Second, it formulates digital
+twin synthesis as a \emph{controlled-fidelity replication problem}, in
+which diversity of component classes, topological patterns, and data
+flows are explicit quantifiable parameters; this makes it feasible to
+replicate large systems at a useful level of abstraction rather than
+requiring an infeasible bit-for-bit copy. Third, the project builds on
+the PIs' prior work on firmware re-hosting (Conware, HALucinator), AI
+planning for privilege escalation (ChainReactor), and autonomous
+vulnerability discovery (Artiphishell, developed for the DARPA AIxCC
+competition) to compose single-component vulnerabilities into end-to-end
+multi-step attacks whose plans are expressed in a structured planning
+language and executed against the twin without risk to the real system.
+Together, these contributions create a new scientific foundation for
+continuous, automated, adversarial assessment of cyberphysical systems.
+
+\smallskip
+\noindent\textbf{Broader Impacts.}
+The security of \CPSs is a matter of direct national importance:
+attacks on pipelines, hospitals, water utilities, and industrial control
+networks have already caused measurable harm to U.S.\ communities, and
+the gap between attacker capability and defender capacity continues to
+widen. By operating continuously and without disrupting operations,
+\sysname can substantially raise the baseline resilience of critical
+infrastructure sectors that cannot currently afford traditional
+red-team engagements. The project will release its framework as open
+source, following the PIs' established practice with widely-used
+artifacts such as \texttt{angr}. The PIs will integrate the research
+into UCSB graduate and undergraduate curricula, involve high-school,
+REU, and ERSP students (including students from underrepresented
+groups), and organize an annual \cps-focused CTF competition open to
+the public. Industry collaboration, internships, and publication in
+top-tier security venues will ensure that results transfer rapidly to
+practitioners defending real systems.
+
+\smallskip
+\noindent\textbf{Keywords:} cyberphysical systems; digital twins;
+AI agents; red teaming; critical infrastructure security.

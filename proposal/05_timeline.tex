@@ -1,0 +1,40 @@
+\section{Timeline}
+\label{sec:timeline}
+
+The project is planned as a three-year effort, with thrusts serialized
+in their primary focus but running in parallel at a lower intensity so
+that an end-to-end prototype exists from the first year.
+
+\paragraph{Year 1: Knowledge Base and Observation.}
+Primary focus on Thrust~1. We will design and implement the hybrid
+KB, develop the first generation of passive observation modules
+(network, log, configuration), and deploy them on the UCSB internal
+network and on the water-treatment reference testbed. By the end of
+Year~1, a rudimentary Replication Agent and Red Team Agent will
+operate against a hand-built twin of the water-treatment testbed,
+establishing the end-to-end loop.
+
+\paragraph{Year 2: Replication.}
+Primary focus on Thrust~2. We will formalize and implement the
+controlled-fidelity replication algorithm, integrate QEMU, HALucinator,
+and Conware-derived mock synthesis, and extend the Replication Agent
+to consume the KB automatically. A second reference testbed
+(building automation) and at least one partner environment will be
+brought into the evaluation. Year~2 deliverables include a quantitative
+study of twin fidelity on the water-treatment testbed.
+
+\paragraph{Year 3: Analysis and integration.}
+Primary focus on Thrust~3. We will develop the PDDL-based planning
+domain for multi-host \cps environments, implement the LLM/classical
+hybrid planner, integrate component-level analyses as sources of
+atomic findings, and run end-to-end red-team campaigns on all three
+reference testbeds. Year~3 will also include a longitudinal evaluation
+of the feedback loop: how much does twin fidelity and red-team
+precision improve over successive iterations of analyst validation?
+
+\paragraph{Cross-cutting activities.}
+Open-source releases, publications, student involvement, and the
+annual CPS-focused CTF competition (\S\ref{sec:broader}) run across
+all three years. Each thrust produces artifacts that feed the others,
+and the end-to-end prototype is maintained continuously rather than
+assembled at the end.

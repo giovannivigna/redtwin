@@ -1,0 +1,202 @@
+\section{Technical Approach}
+\label{sec:approach}
+
+This section describes the overall architecture of \sysname and the
+design principles that shape it, before the next section drills into
+the specific research problems that each component raises.
+
+\subsection{Design Principles}
+\label{sec:approach-principles}
+
+Four design principles run through the \sysname architecture and
+distinguish it from prior automated-assessment efforts.
+
+\paragraph{Non-disruption as a first-class invariant.}
+Every agent that touches the real \cps is strictly passive. Active
+interaction---probing, fuzzing, exploit validation, even latency-sensitive
+queries---is performed exclusively against the digital twin. This
+invariant is enforced at the architectural level, not left to operator
+convention: the Observer Agents are given capabilities that are
+passive by construction (packet capture, log reading, configuration
+polling), and all action-capable agent roles run in an environment
+whose only reachable network is the twin's.
+
+\paragraph{Agents as cooperating specialists, not monoliths.}
+Rather than building one large agent that attempts to do everything,
+\sysname decomposes the workflow across four roles, each with a tight
+specification, a narrow tool set, and a small surface of interaction
+with the others. This improves reliability (failure modes are
+localized), cost (specialist agents can use smaller models where
+appropriate), and security (the principle of least privilege can be
+applied to agents, not just users).
+
+\paragraph{Knowledge as the shared spine.}
+The KB is not a log of what the system did; it is a living model of
+what the system \emph{is}. Every agent reads from it, writes to it, and
+treats it as the authoritative source of truth. Contradictions between
+documentation and observation are recorded as first-class facts, not
+resolved silently, so that the human operator can be brought in when
+the agents cannot reconcile them.
+
+\paragraph{Closed-loop operation.}
+\sysname is not a pipeline that runs end-to-end once. It is a set of
+feedback loops: documentation updates the KB, which updates the
+observation plan, which updates the KB, which updates the twin, which
+exposes weaknesses, which produce analyst decisions, which update the
+KB. Every component is designed to be incremental: the KB supports
+additions and revisions, the observation plan supports live
+reconfiguration, the twin supports partial reconstruction rather than
+only full rebuilds, and the red team supports re-running only the
+analyses whose assumptions have changed.
+
+\subsection{System Architecture}
+\label{sec:approach-arch}
+
+Figure~\ref{fig:arch} shows how the four agent teams, the real \cps,
+the digital twin, and the human analyst are connected.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    node distance=6mm and 9mm,
+    agent/.style={rectangle, rounded corners=2pt, draw=black!70, fill=blue!6,
+                  minimum width=26mm, minimum height=8mm, align=center,
+                  inner sep=3pt},
+    store/.style={cylinder, shape border rotate=90, aspect=0.25, draw=black!70,
+                  fill=gray!10, minimum width=22mm, minimum height=10mm,
+                  align=center, inner sep=2pt},
+    system/.style={rectangle, draw=black!70, fill=green!6, minimum width=30mm,
+                   minimum height=10mm, align=center, inner sep=3pt},
+    twin/.style={rectangle, draw=black!70, dashed, fill=orange!6,
+                 minimum width=30mm, minimum height=10mm, align=center,
+                 inner sep=3pt},
+    human/.style={rectangle, draw=black!70, fill=red!6, minimum width=26mm,
+                  minimum height=8mm, align=center, inner sep=3pt},
+    arr/.style={-{Latex[length=2mm]}, thick, draw=black!65},
+    darr/.style={{Latex[length=2mm]}-{Latex[length=2mm]}, thick, draw=black!65},
+  ]
+
+  % KB in the center
+  \node[store] (kb) {Knowledge\\Base (Graph + Vector)};
+
+  % Agent teams arranged around the KB
+  \node[agent, above left=10mm and 2mm of kb]  (kbA)  {KB Agents};
+  \node[agent, above right=10mm and 2mm of kb] (obsA) {Observer Agents};
+  \node[agent, below left=10mm and 2mm of kb]  (repA) {Replication Agents};
+  \node[agent, below right=10mm and 2mm of kb] (rtA)  {Red Team Agents};
+
+  % External elements
+  \node[store, left=14mm of kbA] (docs) {Documentation\\Policies, IaC};
+  \node[system, below=10mm of docs] (cps) {Real Cyberphysical\\System};
+  \node[twin, right=14mm of obsA] (twin) {Digital Twin\\(VMs, containers,\\emulators)};
+  \node[human, below=18mm of kb] (human) {Human Analyst};
+
+  % Arrows - data flow into KB
+  \draw[arr] (docs) -- (kbA);
+  \draw[arr] (cps.east) -- node[above,font=\scriptsize,pos=0.45]{passive obs.} (obsA.west);
+  \draw[arr] (kbA) -- (kb);
+  \draw[arr] (obsA) -- (kb);
+
+  % Arrows - KB drives replication and red team
+  \draw[arr] (kb) -- (repA);
+  \draw[arr] (kb) -- (rtA);
+  \draw[arr] (repA.east) -- node[above,font=\scriptsize,pos=0.3]{build} (twin.south west);
+  \draw[arr] (rtA.east) -- node[above,font=\scriptsize,pos=0.3]{attack} (twin.south east);
+
+  % Arrows - human in the loop
+  \draw[arr] (rtA) -- node[right,font=\scriptsize]{findings} (human);
+  \draw[arr] (human.west) to[bend right=18] node[below,font=\scriptsize,pos=0.55]{validation} (cps.south east);
+  \draw[arr] (human.north) -- node[right,font=\scriptsize,pos=0.5]{feedback} (kb.south);
+
+  % Plan coordination between KB and Observer agents
+  \draw[darr, dashed] (kbA) -- node[above,font=\scriptsize]{plan update} (obsA);
+
+\end{tikzpicture}
+\caption{\sysname architecture. Four agent teams (KB, Observer,
+Replication, Red Team) cooperate around a hybrid knowledge base. Only
+the Observer Agents touch the real \cps, and they do so passively. All
+attack activity occurs against the digital twin. Human analysts
+validate findings on the real system and feed both confirmations and
+false-positive diagnoses back into the knowledge base.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Agent Roles in Detail}
+\label{sec:approach-roles}
+
+\subsubsection{Knowledge Base Agents}
+KB Agents are responsible for the long-lived representation of the
+target \cps. Their inputs are heterogeneous: vendor manuals in PDF,
+network diagrams in Visio or Draw.io, configuration files in YAML and
+INI, infrastructure-as-code in Terraform or Ansible, software bills of
+materials, engineering change logs, and, critically, the operator's
+security policy. KB Agents use LLMs to extract structured facts from
+unstructured inputs, write those facts into a graph database, and
+retain the source text (with provenance) in a vector store for later
+retrieval. When inputs conflict, or when a required fact is missing
+(e.g., the network diagram references a PLC whose firmware version is
+not documented), the KB Agents generate a targeted question for a
+human operator rather than guessing.
+
+\subsubsection{Observer Agents}
+Observer Agents translate the KB's picture of the system into a
+concrete observation plan. The plan specifies, for each subnet of
+interest, what passive vantage point will be used (SPAN port, TAP,
+service-mesh sidecar, host-level eBPF probe, log shipper), what
+signals will be collected, what volume of traffic will be retained,
+and what privacy or safety constraints apply. Observer Agents deploy
+themselves (typically as lightweight containers in an adjacent
+segment) and continuously feed the KB with three kinds of update:
+\emph{confirmations} of previously-known facts (which raise confidence
+scores), \emph{discoveries} of previously-unknown facts (which create
+new nodes in the graph), and \emph{contradictions} with documentation
+(which are flagged for human attention).
+
+\subsubsection{Replication Agents}
+Replication Agents are the bridge between what the system \emph{is}
+(as described by the KB) and what the defender can \emph{attack} (a
+digital twin). For each class of component in the KB, a Replication
+Agent selects a replication strategy: a full virtual machine for
+commodity servers, a container for microservices, an emulator such as
+QEMU for a non-x86 controller, an abstraction-layer rehosted firmware
+image (as in HALucinator) for an embedded device whose hardware we
+cannot fully emulate, or a behavioral \emph{mock} (as in Conware) for
+a component we can observe but cannot run. The agent then assembles
+these replicated components into a network topology that mirrors the
+real one, populates it with representative data, and exposes it to
+the Red Team Agents. The controlled-fidelity aspect of this process is
+discussed in detail as Thrust~2 (\S\ref{sec:thrust2}).
+
+\subsubsection{Red Team Agents}
+Red Team Agents operate exclusively against the twin. They instantiate
+a clean snapshot, select a ``flag'' whose compromise represents a
+security-meaningful outcome (e.g., unauthorized modification of a
+setpoint, escalation to an engineering workstation, exfiltration of
+historian data), and plan a multi-step attack from an initial attacker
+position. Atomic steps---individual exploits, misconfigurations,
+privilege escalations---are drawn from a library that is continually
+updated with findings from component-level analyses (fuzzing, static
+analysis, symbolic execution) applied to the twin's software. Steps
+are composed into a plan via PDDL, using the precondition/postcondition
+formulation we developed in ChainReactor. Successful plans are
+replayed on a clean twin to eliminate side-effect confounds, and are
+then promoted to findings.
+
+\subsection{Human-in-the-Loop Design}
+\label{sec:approach-human}
+
+\sysname is not a fully autonomous system and does not aspire to be
+one. The human analyst is the arbiter of ground truth: they decide
+whether a twin-reproducible attack is realistic, whether to attempt
+validation on the real system, and whether a false positive reflects a
+policy misalignment or a twin-fidelity bug. Three design choices
+support this role. First, every finding carries a \emph{provenance
+trace} through the KB, the observations, and the twin, so that the
+analyst can see why the system believes the attack is real. Second,
+the analyst's decisions are first-class inputs to the system: a
+``false positive due to fidelity gap'' verdict triggers a specific
+remediation workflow in the KB and Replication Agents. Third, the
+validation process on the real system is itself scaffolded by the
+agents, which propose a minimally invasive validation procedure that
+the analyst can approve, modify, or reject.

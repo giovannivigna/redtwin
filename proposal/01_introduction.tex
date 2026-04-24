@@ -1,0 +1,237 @@
+\section{Introduction}
+\label{sec:intro}
+
+Cyberphysical systems (\CPSs) have become the connective tissue of
+modern society. Electric power grids, water and wastewater utilities,
+oil and gas pipelines, manufacturing plants, hospitals, building
+automation systems, and transportation networks all rely on software
+that observes and acts upon the physical world. Over the last two
+decades, these systems have become increasingly networked, increasingly
+dependent on commodity computing components, and increasingly reachable
+from the same internet that carries commodity cybercrime. At the same
+time, the consequences of a successful attack against them have grown
+correspondingly severe: a compromise of a chemical plant controller,
+a medical infusion pump, or a substation protection relay is not a
+data breach but a safety incident. Recent years have made this concrete.
+Ransomware has shut down fuel pipelines and disrupted hospitals for
+weeks; attackers have altered the chemistry of municipal water supplies;
+and nation-state adversaries have been observed pre-positioning inside
+U.S.\ critical-infrastructure networks. The defensive side of this
+arms race has not kept pace.
+
+\subsection{The Problem: Why CPS Security Assessment is Hard}
+\label{sec:intro-problem}
+
+Assessing the security posture of a cyberphysical system is categorically
+harder than assessing a typical enterprise IT environment, for four
+reinforcing reasons.
+
+\paragraph{Heterogeneity and non-standard components.}
+A single \cps deployment typically contains a mixture of commodity
+servers, programmable logic controllers (PLCs), remote terminal units
+(RTUs), human-machine interfaces (HMIs), specialized sensors and
+actuators, industrial network equipment (such as serial-to-Ethernet
+gateways), and safety systems, each speaking its own protocol (Modbus,
+DNP3, OPC~UA, IEC~61850, EtherCAT, BACnet, and dozens of proprietary
+variants). Many of these components run firmware for which no source
+code, documentation, or test environment is available, and standard
+security tooling built for x86 Linux simply does not apply.
+
+\paragraph{Operational sensitivity.}
+The techniques that security teams routinely apply in enterprise
+environments---active network scanning, credential spraying, fuzzing,
+exploit validation---cannot safely be used against a running \cps. A
+broadcast probe sent to the wrong subnet can reset a controller; a
+malformed Modbus request can halt a production line; a short disruption
+of a clinical device can injure a patient. This is not a hypothetical
+concern: scanning-induced outages have been documented repeatedly in
+industrial environments, and many operators now contractually
+\emph{prohibit} active assessment of production networks. The result
+is that the tests most likely to find real vulnerabilities are the ones
+least likely to be permitted.
+
+\paragraph{Dynamism.}
+\CPSs are not static. Firmware is patched (or not patched), equipment is
+added, removed, or relocated; vendor connections come and go; operating
+modes change seasonally or in response to demand; emergency
+reconfigurations leave behind temporary-but-permanent bypasses. An
+assessment performed at time $t$ can be partially invalidated by time
+$t + \Delta$, where $\Delta$ may be days, not years. Yet current
+assessment cadences are typically annual, and sometimes much longer.
+
+\paragraph{Scarce expertise.}
+The specialists who can credibly evaluate such a system---engineers who
+understand both the physical process and the security-relevant software
+stack---are few, expensive, and concentrated in a small number of
+consultancies and national laboratories. No plausible growth in the
+workforce will close this gap at the speed at which the attack surface
+is growing.
+
+\subsection{The State of the Art, and Why It Is Insufficient}
+\label{sec:intro-sota}
+
+Current practice for \cps security assessment reflects these
+constraints. At the high end, a site will undergo a periodic manual
+penetration test: a small team of experts spends days or weeks
+interviewing operators, reading documentation, passively sniffing
+traffic, and cautiously interacting with a limited subset of the system,
+typically producing a report that is consumed once and then shelved. At
+the lower end, passive asset inventory tools and industrial IDS
+products observe network traffic and raise alerts against known-bad
+patterns, but they do not reason about how a sophisticated adversary
+might combine individually-innocuous weaknesses into an end-to-end
+breach. In between lie isolated-lab testbeds in which a vendor's
+equipment is analyzed in depth, but these labs are expensive to build
+and inevitably diverge from any particular production deployment.
+
+Three limitations are common to all of these approaches. First, they
+are \emph{sporadic}: a site may be analyzed once a year, or once a
+decade, while the threat landscape and the site itself evolve
+continuously. Second, they are \emph{shallow with respect to
+composition}: even excellent individual-component analyses stop short
+of the multi-step attacks that characterize real incidents, because
+such reasoning is performed (if at all) in the head of a human expert
+whose time is limited. Third, they fail to exploit the central asset
+of the defender---knowledge of the actual system's configuration,
+documentation, and behavior---at scale, because there is no
+infrastructure to translate that knowledge into automated adversarial
+testing.
+
+Meanwhile, attackers are moving in the opposite direction. Commodity
+offensive tooling now includes AI-assisted reconnaissance, vulnerability
+triage, and exploitation support. Recent evaluations of frontier
+language models demonstrate measurable, rapid progress on multi-step
+cyber-attack scenarios that only a few years ago would have required
+a skilled human operator. The asymmetry is stark: the defender's
+workflow is still artisanal, while the attacker's is increasingly
+automated.
+
+\subsection{The Proposed Approach: \sysname}
+\label{sec:intro-approach}
+
+We propose \sysname, an agentic framework for the continuous,
+non-disruptive, in-depth security assessment of cyberphysical systems.
+The central idea is to move the adversarial activity off of the real
+system and onto a \emph{faithful, continuously-updated digital twin},
+where arbitrary---and otherwise unsafe---analyses can be performed
+24~hours a day, 7~days a week, without any risk to the physical process.
+Human experts remain in the loop, but their scarce attention is applied
+where it matters most: confirming high-confidence findings, resolving
+ambiguity that agents cannot, and validating suspected vulnerabilities
+on the real system once a twin-based analysis has made the case that
+validation is worth attempting.
+
+\sysname is organized around four cooperating teams of AI agents, which
+together form a closed feedback loop rather than a linear pipeline:
+
+\begin{itemize}[leftmargin=1.3em,itemsep=0.15em,topsep=0.3em]
+  \item \textbf{Knowledge Base (KB) Agents} ingest all forms of
+  documentation about the target \cps---configuration files, logs,
+  network diagrams, equipment manuals, software bills of materials,
+  infrastructure-as-code artifacts, security policies, and
+  change-management records---and organize this evidence into a hybrid
+  knowledge base combining a graph database (for structured facts such
+  as topology and component roles) and a vector database (for
+  natural-language content that supports retrieval-augmented agent
+  reasoning). KB Agents proactively interact with human operators when
+  they detect missing or contradictory information.
+
+  \item \textbf{Observer Agents} use the KB to construct an
+  \emph{observation plan} that establishes strictly passive vantage
+  points across the \cps: network taps, log readers, container-based
+  sensors in specific subnets, service-mesh integrations, and eBPF
+  probes where permitted. Observer Agents confirm or refute the KB's
+  picture of the system and discover components, software versions,
+  and flows that documentation missed. Their observations are
+  continuous, so the KB evolves with the real system.
+
+  \item \textbf{Replication Agents} consume the KB and observations to
+  synthesize a digital twin: a virtualized, emulated, or containerized
+  replica that reproduces the system's components, their software
+  configuration, their network topology, and representative data. For
+  specialized hardware, Replication Agents build on the PIs' prior
+  firmware re-hosting work---Conware and HALucinator---and, where even
+  that is not possible, synthesize \emph{mock} components whose behavior
+  is derived from observed API and network interactions. Crucially,
+  fidelity is an explicit, quantified parameter of the replication
+  algorithm rather than an implicit assumption.
+
+  \item \textbf{Red Team Agents} continuously attack the digital twin.
+  They compose \emph{component-level} analyses (fuzzing, static
+  analysis, symbolic execution, taint tracking) with \emph{system-level}
+  multi-step attack planning, building on our ChainReactor work on
+  AI-planning-based privilege escalation and on the Artiphishell system
+  developed for the DARPA AIxCC competition. Each candidate attack is
+  grounded in a precondition/postcondition model expressed in PDDL, and
+  its goal is to reach a nominated ``flag'' whose compromise has a
+  clear security interpretation.
+\end{itemize}
+
+A finding produced by a Red Team Agent is not the end of the process.
+Every confirmed attack on the twin is presented to a human security
+analyst for triage. If the analyst judges the finding to be a
+true-positive candidate, they validate it on the real system using an
+appropriately cautious procedure, producing either a confirmed
+vulnerability or additional evidence that the twin diverges from
+reality. If the finding is judged to be a false positive caused by an
+inaccurate twin, the fact of that inaccuracy is fed back to the KB,
+Observer, and Replication Agents, which jointly plan updates to
+documentation, observations, and configuration. Over time, this loop
+drives both the twin's fidelity and the Red Team's precision upward.
+
+\subsection{Contributions and Research Questions}
+\label{sec:intro-contribs}
+
+This project will produce the following concrete contributions.
+
+\begin{enumerate}[leftmargin=1.5em,itemsep=0.15em,topsep=0.3em]
+  \item A design for a \emph{hybrid, agent-native knowledge base} for
+  cyberphysical systems that combines structured graph representations
+  of topology and component roles with vectorized natural-language
+  representations of documentation, policies, and observations, and
+  that is resilient to partial, stale, and contradictory inputs.
+
+  \item A suite of \emph{strictly-passive observation techniques} for
+  \CPSs---network, log, API, configuration, and security-tool-based---
+  and a principled method for synthesizing them into a continuously
+  evolving system model.
+
+  \item A \emph{controlled-fidelity digital twin synthesis algorithm}
+  in which diversity of component classes, topological patterns, and
+  data flows are explicit parameters, enabling minimally representative
+  twins of large-scale systems.
+
+  \item An \emph{agentic red-team workflow} that composes component-level
+  vulnerability analyses into multi-step attack plans via PDDL-based
+  planning, adapted from our ChainReactor and Artiphishell work and
+  extended with the emergent reasoning capabilities of modern LLMs.
+
+  \item An \emph{open-source reference implementation} of \sysname,
+  together with a set of reference \cps testbeds and benchmarks that
+  the research community can use to compare future approaches.
+\end{enumerate}
+
+These contributions will answer the following research questions:
+\textbf{(RQ1)} Can a team of AI agents construct and maintain a useful,
+living model of a cyberphysical system from the evidence that a typical
+operator already has?
+\textbf{(RQ2)} What is the minimum fidelity a digital twin needs in
+order to surface the same classes of vulnerabilities as the real
+system, and how can that fidelity be measured?
+\textbf{(RQ3)} Can AI-agent red teams, operating against a twin,
+discover multi-step vulnerabilities with precision and recall
+competitive with---and eventually exceeding---human red teams?
+\textbf{(RQ4)} How should human experts be positioned in the loop so
+that their scarce attention produces maximum marginal value?
+
+\subsection{Organization of the Proposal}
+The remainder of this proposal is organized as follows.
+Section~\ref{sec:approach} describes the overall technical approach and
+the four agent teams.
+Section~\ref{sec:thrusts} details the three research thrusts that
+constitute the bulk of the proposed work.
+Section~\ref{sec:evaluation} presents our evaluation plan;
+Section~\ref{sec:timeline} the project timeline;
+Section~\ref{sec:broader} our broader impacts;
+Section~\ref{sec:pis} the qualifications of the PIs;
+and Section~\ref{sec:prior} results from prior NSF support.
